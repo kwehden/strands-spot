@@ -1,18 +1,28 @@
 """
 Example: Using use_spot with Strands Agent
 
-This demonstrates how to integrate use_spot with a Strands agent.
+This demonstrates how to integrate use_spot with a Strands agent using AWS Bedrock.
+
+Requirements:
+- AWS credentials configured (aws configure)
+- Bedrock access with Claude model permissions
+- Spot robot environment variables: SPOT_HOSTNAME, SPOT_USERNAME, SPOT_PASSWORD
+
+Model Configuration:
+- Uses Claude 3.5 Sonnet v2 (anthropic.claude-3-5-sonnet-20241022-v2:0)
+- This model supports on-demand throughput (no inference profile needed)
+- For Claude 4.x models, you'll need to configure an inference profile in AWS Console
+
+See: https://strandsagents.com/latest/user-guide/concepts/model-providers/amazon-bedrock/
 """
 
 import os
+import sys
 from strands import Agent
 from strands.models.bedrock import BedrockModel
 
-# Import use_spot tool with Strands decorator
-import sys
-
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "tools"))
-from use_spot_strands import use_spot
+# Import use_spot tool (installed package)
+from strands_spot import use_spot
 
 
 def main():
@@ -28,9 +38,11 @@ def main():
     print("=" * 50)
 
     # Create Strands agent with use_spot tool
+    # Using Claude 3.5 Sonnet v2 (supports on-demand throughput)
     model = BedrockModel(
-        model_id="us.anthropic.claude-sonnet-4-20250514-v1:0",
-        params={"temperature": 1.0, "max_tokens": 10000},
+        model_id="anthropic.claude-3-5-sonnet-20241022-v2:0",
+        temperature=1.0,
+        max_tokens=10000
     )
 
     agent = Agent(
