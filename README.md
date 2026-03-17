@@ -76,21 +76,22 @@ export SPOT_USERNAME="admin"
 export SPOT_PASSWORD="password"
 ```
 
+**Or use credential profiles:**
+```bash
+setSpotcon new myrobot    # Create credential profile
+spotNetInfo --profile myrobot  # Test connection
+```
+
 ## Usage
 
 ```python
 from strands_spot import use_spot
 
-# Stand the robot
-use_spot(
-    hostname="192.168.80.3",
-    service="robot_command",
-    method="stand"
-)
+# Stand the robot (uses environment variables)
+use_spot(service="robot_command", method="stand")
 
 # Capture image
 use_spot(
-    hostname="192.168.80.3",
     service="image",
     method="get_image_from_sources",
     params={"image_sources": ["frontleft_fisheye_image"]}
@@ -100,6 +101,43 @@ use_spot(
 from strands import Agent
 agent = Agent(tools=[use_spot])
 agent("Make Spot stand and take a picture")
+```
+
+## New Features
+
+**Environment-based credentials** - No need to pass hostname/username/password to every call:
+```python
+# Set once
+export SPOT_HOSTNAME="192.168.80.3"
+export SPOT_USERNAME="admin" 
+export SPOT_PASSWORD="password"
+
+# Use anywhere
+use_spot(service="robot_command", method="stand")
+```
+
+**Context manager support** - Guaranteed resource cleanup:
+```python
+from strands_spot import SpotConnection
+
+with SpotConnection() as conn:
+    conn.acquire_lease()
+    # Do robot operations
+    # Lease automatically released on exit
+```
+
+**Credential profiles** - Manage multiple robot configurations:
+```bash
+setSpotcon new production     # Create profile
+setSpotcon new development    # Create another
+spotNetInfo --profile production  # Use profile
+```
+
+**Network diagnostics** - Test connections and view robot network info:
+```bash
+spotNetInfo                   # Basic network info
+spotNetInfo --format json     # JSON output
+spotNetInfo --profile myrobot # Use credential profile
 ```
 
 ## Available Services
@@ -173,41 +211,26 @@ agent("Take a picture and describe what you see")
 ```python
 from strands_spot import use_spot
 
-hostname = "192.168.80.3"
-username = "admin"
-password = "password"
+# Environment variables set: SPOT_HOSTNAME, SPOT_USERNAME, SPOT_PASSWORD
 
 # 1. Power on motors
-use_spot(
-    hostname=hostname, username=username, password=password,
-    service="power", method="power_on", params={"timeout_sec": 20}
-)
+use_spot(service="power", method="power_on", params={"timeout_sec": 20})
 
 # 2. Stand up
-use_spot(
-    hostname=hostname, username=username, password=password,
-    service="robot_command", method="stand", params={}
-)
+use_spot(service="robot_command", method="stand")
 
 # 3. Capture image from front-left camera
 result = use_spot(
-    hostname=hostname, username=username, password=password,
-    service="image", method="get_image_from_sources",
+    service="image", 
+    method="get_image_from_sources",
     params={"image_sources": ["frontleft_fisheye_image"]}
 )
 
 # 4. Sit down
-use_spot(
-    hostname=hostname, username=username, password=password,
-    service="robot_command", method="sit", params={}
-)
+use_spot(service="robot_command", method="sit")
 
 # 5. Power off
-use_spot(
-    hostname=hostname, username=username, password=password,
-    service="power", method="power_off",
-    params={"cut_immediately": False, "timeout_sec": 20}
-)
+use_spot(service="power", method="power_off", params={"cut_immediately": False})
 ```
 
 ### Velocity Control (Walking)
@@ -397,6 +420,24 @@ Report your findings in a structured format.
 # - Analyzes visual data with vision models
 # - Generates comprehensive inspection report
 ```
+
+## CLI Utilities
+
+**setSpotcon** - Credential profile management:
+```bash
+setSpotcon new myrobot        # Create named profile
+setSpotcon new                # Auto-generate name (spotCredentials0, etc.)
+setSpotcon replace myrobot    # Replace existing profile
+```
+
+**spotNetInfo** - Network diagnostics and connection testing:
+```bash
+spotNetInfo                   # Use environment variables
+spotNetInfo --profile myrobot # Use credential profile  
+spotNetInfo --format json     # JSON output format
+```
+
+Profiles are stored securely in `~/.spot/` with proper file permissions.
 
 ## Safety
 

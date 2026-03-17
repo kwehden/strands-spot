@@ -35,6 +35,88 @@ class TestSpotConnection:
         mock_sdk.assert_called_once()
         mock_robot.authenticate.assert_called_once()
 
+    @patch("use_spot.bosdyn.client.create_standard_sdk")
+    def test_env_var_fallback(self, mock_sdk):
+        """Test environment variable fallback"""
+        if not SPOT_SDK_AVAILABLE:
+            pytest.skip("Spot SDK not available")
+
+        # Setup mocks
+        mock_robot = MagicMock()
+        mock_sdk_instance = MagicMock()
+        mock_sdk_instance.create_robot.return_value = mock_robot
+        mock_sdk.return_value = mock_sdk_instance
+
+        # Set environment variables
+        os.environ['SPOT_HOSTNAME'] = '192.168.80.5'
+        os.environ['SPOT_USERNAME'] = 'testuser'
+        os.environ['SPOT_PASSWORD'] = 'testpass'
+
+        try:
+            # Create connection without parameters
+            conn = SpotConnection()
+
+            # Verify env vars were used
+            assert conn.hostname == "192.168.80.5"
+            assert conn.username == "testuser"
+            assert conn.password == "testpass"
+        finally:
+            # Clean up env vars
+            for var in ['SPOT_HOSTNAME', 'SPOT_USERNAME', 'SPOT_PASSWORD']:
+                if var in os.environ:
+                    del os.environ[var]
+
+    @patch("use_spot.bosdyn.client.create_standard_sdk")
+    def test_mixed_params_env_vars(self, mock_sdk):
+        """Test mixed parameters and environment variables"""
+        if not SPOT_SDK_AVAILABLE:
+            pytest.skip("Spot SDK not available")
+
+        # Setup mocks
+        mock_robot = MagicMock()
+        mock_sdk_instance = MagicMock()
+        mock_sdk_instance.create_robot.return_value = mock_robot
+        mock_sdk.return_value = mock_sdk_instance
+
+        # Set environment variables
+        os.environ['SPOT_HOSTNAME'] = '192.168.80.5'
+        os.environ['SPOT_USERNAME'] = 'envuser'
+        os.environ['SPOT_PASSWORD'] = 'envpass'
+
+        try:
+            # Create connection with some parameters (should override env vars)
+            conn = SpotConnection(hostname="192.168.80.6", username="paramuser")
+
+            # Verify parameters take precedence
+            assert conn.hostname == "192.168.80.6"
+            assert conn.username == "paramuser"
+            assert conn.password == "envpass"  # From env var
+        finally:
+            # Clean up env vars
+            for var in ['SPOT_HOSTNAME', 'SPOT_USERNAME', 'SPOT_PASSWORD']:
+                if var in os.environ:
+                    del os.environ[var]
+
+    def test_missing_hostname_error(self):
+        """Test error when hostname not provided"""
+        # Clear any existing env vars
+        for var in ['SPOT_HOSTNAME', 'SPOT_USERNAME', 'SPOT_PASSWORD']:
+            if var in os.environ:
+                del os.environ[var]
+
+        with pytest.raises(ValueError, match="Hostname required"):
+            SpotConnection()
+
+    def test_missing_credentials_error(self):
+        """Test error when credentials not provided"""
+        # Clear any existing env vars
+        for var in ['SPOT_HOSTNAME', 'SPOT_USERNAME', 'SPOT_PASSWORD']:
+            if var in os.environ:
+                del os.environ[var]
+
+        with pytest.raises(ValueError, match="Username and password required"):
+            SpotConnection(hostname="192.168.80.3")
+
     def test_lease_management(self):
         """Test lease acquire/release"""
         if not SPOT_SDK_AVAILABLE:

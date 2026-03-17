@@ -1,0 +1,32 @@
+{
+  "project": {
+    "name": "KiroAgentPack",
+    "version": "0.1.0",
+    "description": "Multi-agent spec-driven development workflow system",
+    "type": "agent-pack"
+  },
+  "workflow": {
+    "defaultAgent": "orchestrator",
+    "specDirectory": "spec",
+    "artifactChain": [
+      "context.md",
+      "requirements.md", 
+      "design.md",
+      "tasks.md",
+      "security.md",
+      "post-execution-log.md"
+    ],
+    "qualityGates": [
+      "context-approval",
+      "requirements-approval", 
+      "design-approval",
+      "tasks-approval",
+      "implementation-verification"
+    ]
+  },
+  "safety": {
+    "enableHooks": true,
+    "strictWriteIsolation": true,
+    "requireApprovalForUntrusted": true
+  }
+}

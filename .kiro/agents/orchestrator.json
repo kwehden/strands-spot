@@ -1,0 +1,47 @@
+{
+  "name": "orchestrator",
+  "description": "Spec-driven coordinator that delegates to specialist agents, enforces quality gates, and chains post-execution verification.",
+  "prompt": "file://../prompts/orchestrator.md",
+  "tools": ["read", "write", "glob", "grep", "use_subagent", "thinking", "todo"],
+  "allowedTools": ["read", "glob", "grep", "thinking", "todo"],
+  "toolsSettings": {
+    "write": {
+      "allowedPaths": ["spec/post-execution-log.md"]
+    },
+    "subagent": {
+      "availableAgents": [
+        "repo-governor",
+        "spec-coordinator",
+        "requirements-engineer",
+        "design-architect",
+        "task-planner",
+        "executor",
+        "test-engineer",
+        "security-sentinel",
+        "eval-engineer",
+        "docs-release",
+        "code-reviewer",
+        "postmortem-scribe",
+        "mcp-toolsmith"
+      ],
+      "trustedAgents": [
+        "repo-governor",
+        "spec-coordinator",
+        "requirements-engineer",
+        "design-architect",
+        "task-planner",
+        "docs-release",
+        "code-reviewer",
+        "postmortem-scribe"
+      ]
+    }
+  },
+  "resources": ["file://../steering/**/*.md"],
+  "hooks": {
+    "preToolUse": [
+      {"matcher": "read", "command": ".kiro/hooks/sensitive-file-protector.sh"},
+      {"matcher": "write", "command": ".kiro/hooks/sensitive-file-protector.sh"}
+    ]
+  },
+  "welcomeMessage": "System2 orchestrator ready. Checking spec state..."
+}

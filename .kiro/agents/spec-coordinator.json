@@ -1,0 +1,19 @@
+{
+  "name": "spec-coordinator",
+  "description": "Drafts spec/context.md with scope, goals, constraints, and open questions.",
+  "prompt": "file://../prompts/spec-coordinator.md",
+  "tools": ["read", "write", "glob", "grep"],
+  "allowedTools": ["read", "glob", "grep"],
+  "toolsSettings": {
+    "write": {
+      "allowedPaths": ["spec/context.md"]
+    }
+  },
+  "resources": ["file://../steering/**/*.md"],
+  "hooks": {
+    "preToolUse": [
+      {"matcher": "read", "command": ".kiro/hooks/sensitive-file-protector.sh"},
+      {"matcher": "write", "command": ".kiro/hooks/sensitive-file-protector.sh"}
+    ]
+  }
+}

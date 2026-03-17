@@ -1,0 +1,36 @@
+{
+  "hooks": {
+    "dangerous-command-blocker": {
+      "enabled": true,
+      "script": ".kiro/hooks/dangerous-command-blocker.sh",
+      "triggers": ["shell"],
+      "phase": "preToolUse",
+      "description": "Blocks dangerous shell commands like rm -rf /, chmod 777, force push"
+    },
+    "sensitive-file-protector": {
+      "enabled": true,
+      "script": ".kiro/hooks/sensitive-file-protector.sh", 
+      "triggers": ["read", "write", "shell"],
+      "phase": "preToolUse",
+      "description": "Blocks access to sensitive files like .env, keys, credentials"
+    },
+    "auto-formatter": {
+      "enabled": true,
+      "script": ".kiro/hooks/auto-formatter.sh",
+      "triggers": ["write"],
+      "phase": "postToolUse",
+      "description": "Runs code formatters (prettier, black, gofmt) if available"
+    },
+    "type-checker": {
+      "enabled": true,
+      "script": ".kiro/hooks/type-checker.sh",
+      "triggers": ["write"],
+      "phase": "postToolUse", 
+      "description": "Runs type checkers (tsc, mypy) if available - informational only"
+    }
+  },
+  "allowlists": {
+    "dangerousCommands": ".kiro/hooks/dangerous-commands-allowlist.txt",
+    "sensitivePatterns": ".kiro/hooks/sensitive-patterns.txt"
+  }
+}

@@ -8,9 +8,10 @@ service-method pattern similar to use_aws and use_google.
 import os
 import time
 import logging
-from typing import Dict, Any
+from typing import Dict, Any, Optional
 from datetime import datetime
 from strands import tool
+from .version_detector import SDKVersionDetector
 
 # Spot SDK imports
 try:
@@ -63,36 +64,70 @@ LEASE_REQUIRED_SERVICES = {
 
 
 class SpotConnection:
-    """Manages connection to a Spot robot"""
+    """Manages connection to a Spot robot with environment-based credentials"""
 
-    def __init__(self, hostname: str, username: str, password: str):
+    def __init__(self, hostname: str = None, username: str = None, password: str = None):
         """
-        Initialize connection to Spot robot
+        Initialize connection to Spot robot using environment variables
 
         Args:
-            hostname: Robot IP or hostname
-            username: Robot username
-            password: Robot password
+            hostname: Robot IP or hostname (optional, uses SPOT_HOSTNAME env var)
+            username: Robot username (optional, uses SPOT_USERNAME env var)
+            password: Robot password (optional, uses SPOT_PASSWORD env var)
+        
+        Environment Variables:
+            SPOT_HOSTNAME: Robot IP or hostname (optional if provided as parameter)
+            SPOT_USERNAME: Robot username (optional if provided as parameter)
+            SPOT_PASSWORD: Robot password (optional if provided as parameter)
         """
-        self.hostname = hostname
-        self.username = username
+        # Get hostname from parameter or environment
+        self.hostname = hostname or os.getenv("SPOT_HOSTNAME")
+        if not self.hostname:
+            raise ValueError("Hostname required via parameter or SPOT_HOSTNAME environment variable")
+        
+        # Get credentials from parameters or environment
+        self.username = username or os.getenv("SPOT_USERNAME")
+        self.password = password or os.getenv("SPOT_PASSWORD")
+        
+        if not self.username or not self.password:
+            raise ValueError("Username and password required via parameters or SPOT_USERNAME/SPOT_PASSWORD env vars")
+        
         self.sdk = None
         self.robot = None
         self.lease_client = None
         self.lease_keepalive = None
         self._lease_active = False
 
+        # Detect SDK version for metadata/logging
+        try:
+            self._sdk_version = SDKVersionDetector.detect_version()
+            if SDKVersionDetector.validate_version(self._sdk_version):
+                logger.info(f"Using Boston Dynamics SDK version {self._sdk_version}")
+            else:
+                logger.warning(f"Unsupported or unknown SDK version: {self._sdk_version}")
+        except Exception as e:
+            self._sdk_version = "unknown"
+            logger.warning(f"Could not detect SDK version: {e}")
+
         # Create SDK and robot
         self.sdk = bosdyn.client.create_standard_sdk("use_spot")
-        self.robot = self.sdk.create_robot(hostname)
+        self.robot = self.sdk.create_robot(self.hostname)
 
         # Authenticate
-        self.robot.authenticate(username, password)
-        logger.info(f"Authenticated to robot at {hostname}")
+        self.robot.authenticate(self.username, self.password)
+        logger.info(f"Authenticated to robot at {self.hostname}")
 
         # Time sync (required for commands)
         self.robot.time_sync.wait_for_sync()
         logger.info("Time sync established")
+
+    def __enter__(self):
+        """Context manager entry"""
+        return self
+
+    def __exit__(self, exc_type, exc_val, exc_tb):
+        """Context manager exit with guaranteed cleanup"""
+        self.close()
 
     def acquire_lease(self):
         """Acquire robot control lease"""
@@ -137,9 +172,10 @@ class SpotConnection:
         return self.robot.ensure_client(client_class.default_service_name)
 
     def close(self):
-        """Clean up connection"""
+        """Clean up connection and resources"""
         if self._lease_active:
             self.release_lease()
+        # Additional cleanup can be added here if needed
 
 
 def format_protobuf_response(response) -> dict:
@@ -240,7 +276,6 @@ def execute_method(client, service: str, method: str, params: Dict[str, Any]) ->
 
 @tool
 def use_spot(
-    hostname: str,
     service: str,
     method: str,
     username: str = None,
@@ -278,7 +313,6 @@ def use_spot(
         - spot_check: Diagnostics (start_spot_check)
 
     Args:
-        hostname: Robot IP address (e.g., "192.168.80.3")
         service: Service name from list above
         method: Method name on the service
         username: Robot username (defaults to SPOT_USERNAME env var)
@@ -286,6 +320,11 @@ def use_spot(
         params: Method parameters as dictionary
         timeout: Operation timeout in seconds
         keep_lease: Maintain lease after operation (default: False)
+
+    Environment Variables:
+        SPOT_HOSTNAME: Robot IP address (required, e.g., "192.168.80.3")
+        SPOT_USERNAME: Robot username (optional if provided as parameter)
+        SPOT_PASSWORD: Robot password (optional if provided as parameter)
 
     Returns:
         Standardized response dict:
@@ -304,9 +343,8 @@ def use_spot(
         The LLM can "see" and analyze these images directly in the response.
 
     Examples:
-        # Stand the robot
+        # Stand the robot (requires SPOT_HOSTNAME env var)
         use_spot(
-            hostname="192.168.80.3",
             service="robot_command",
             method="stand",
             params={}
@@ -314,7 +352,6 @@ def use_spot(
 
         # Get robot state (no lease required)
         use_spot(
-            hostname="192.168.80.3",
             service="robot_state",
             method="get_robot_state",
             params={}
@@ -322,7 +359,6 @@ def use_spot(
 
         # Walk forward
         use_spot(
-            hostname="192.168.80.3",
             service="robot_command",
             method="velocity_command",
             params={"v_x": 0.5, "v_y": 0.0, "v_rot": 0.0}
@@ -330,7 +366,6 @@ def use_spot(
 
         # Capture image
         use_spot(
-            hostname="192.168.80.3",
             service="image",
             method="get_image_from_sources",
             params={"image_sources": ["frontleft_fisheye_image"]}
@@ -359,23 +394,9 @@ def use_spot(
     lease_acquired = False
 
     try:
-        # Load credentials from env if not provided
-        username = username or os.getenv("SPOT_USERNAME")
-        password = password or os.getenv("SPOT_PASSWORD")
-
-        if not username or not password:
-            return {
-                "status": "error",
-                "content": [
-                    {
-                        "text": "Missing credentials. Provide username/password or set SPOT_USERNAME and SPOT_PASSWORD env vars"
-                    }
-                ],
-            }
-
-        # Create connection
-        logger.info(f"Connecting to robot at {hostname}")
-        conn = SpotConnection(hostname, username, password)
+        # Create connection using environment variables
+        logger.info("Connecting to robot using environment variables")
+        conn = SpotConnection(username=username, password=password)
 
         # Acquire lease if needed
         if service in LEASE_REQUIRED_SERVICES:
@@ -413,7 +434,8 @@ def use_spot(
             "duration_ms": duration_ms,
             "lease_acquired": lease_acquired,
             "lease_retained": keep_lease and lease_acquired,
-            "robot": {"hostname": hostname},
+            "robot": {"hostname": conn.hostname},
+            "sdk_version": conn._sdk_version,
         }
 
         # Special handling for image service - extract images for LLM consumption
@@ -473,8 +495,9 @@ def use_spot(
         if conn and lease_acquired and not keep_lease:
             try:
                 conn.release_lease()
-            except:
-                pass
+                logger.info("Lease released after RPC error")
+            except Exception as cleanup_error:
+                logger.error(f"Failed to release lease during error cleanup: {cleanup_error}")
 
         # Build error metadata
         error_metadata = {
@@ -500,8 +523,9 @@ def use_spot(
         if conn and lease_acquired and not keep_lease:
             try:
                 conn.release_lease()
-            except:
-                pass
+                logger.info("Lease released after error")
+            except Exception as cleanup_error:
+                logger.error(f"Failed to release lease during error cleanup: {cleanup_error}")
 
         # Build error metadata
         error_metadata = {
@@ -524,5 +548,6 @@ def use_spot(
         if conn and not keep_lease:
             try:
                 conn.close()
-            except:
-                pass
+                logger.debug("Connection closed in finally block")
+            except Exception as cleanup_error:
+                logger.error(f"Failed to close connection during cleanup: {cleanup_error}")
